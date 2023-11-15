@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - csye7125-fall2023-group07.operator.souvikdinda.me
+  resources:
+  - httpchecks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - csye7125-fall2023-group07.operator.souvikdinda.me
+  resources:
+  - httpchecks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - csye7125-fall2023-group07.operator.souvikdinda.me
+  resources:
+  - httpchecks/status
+  verbs:
+  - get
+  - patch
+  - update
