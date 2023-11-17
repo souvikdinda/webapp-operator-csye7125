@@ -28,18 +28,21 @@ type HttpCheckSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Name                      string `json:"name,omitempty"`
-	Uri                       string `json:"uri,omitempty"`
-	Num_Retries               int    `json:"num_retries,omitempty"`
-	Response_Status_Code      int    `json:"response_status_code,omitempty"`
-	Check_Interval_In_Seconds int    `json:"check_interval_in_seconds,omitempty"`
+	Name               string `json:"name,omitempty"`
+	Uri                string `json:"uri,omitempty"`
+	IsPaused           bool   `json:"isPaused,omitempty"`
+	NumRetries         int    `json:"numRetries,omitempty"`
+	ResponseStatusCode int    `json:"responseStatusCode,omitempty"`
+	CheckInterval      int    `json:"checkInterval,omitempty"`
+	Status             string `json:"status,omitempty"`
 }
 
 // HttpCheckStatus defines the observed state of HttpCheck
 type HttpCheckStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	ObservedStatus string `json:"observedStatus,omitempty"`
+	LastExecutionTime   metav1.Time `json:"lastExecutionTime,omitempty"`
+	LastExecutionStatus string      `json:"lastExecutionStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true

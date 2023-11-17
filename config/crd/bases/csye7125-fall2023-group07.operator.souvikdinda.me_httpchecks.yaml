@@ -34,24 +34,31 @@ spec:
           spec:
             description: HttpCheckSpec defines the desired state of HttpCheck
             properties:
-              check_interval_in_seconds:
+              checkInterval:
                 type: integer
+              isPaused:
+                type: boolean
               name:
                 type: string
-              num_retries:
+              numRetries:
                 type: integer
-              response_status_code:
+              responseStatusCode:
                 type: integer
+              status:
+                type: string
               uri:
                 type: string
             type: object
           status:
             description: HttpCheckStatus defines the observed state of HttpCheck
             properties:
-              observedStatus:
+              lastExecutionStatus:
+                type: string
+              lastExecutionTime:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
+                format: date-time
                 type: string
             type: object
         type: object
