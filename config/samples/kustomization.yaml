@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- csye7125-fall2023-group07_v1_httpcheck.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
