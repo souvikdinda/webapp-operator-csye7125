@@ -48,6 +48,8 @@ const (
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks/finalizers,verbs=update
+//+kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -60,7 +62,7 @@ const (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *HttpCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-
+	fmt.Println("Reconciling HttpCheck")
 	httpCheck := &csye7125fall2023group07v1.HttpCheck{}
 
 	if err := r.Get(ctx, req.NamespacedName, httpCheck); err != nil {
@@ -110,6 +112,7 @@ func (r *HttpCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
+// Create or update the associated resources
 func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpCheck *csye7125fall2023group07v1.HttpCheck) error {
 	log := log.FromContext(ctx)
 
@@ -149,6 +152,25 @@ func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpC
 			log.Error(err, "unable to update CronJob")
 			return err
 		}
+	}
+
+	cronJobStatus := &batchv1.CronJob{}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(cronJob), cronJobStatus); err != nil {
+		log.Error(err, "unable to get CronJob status")
+		return err
+	}
+
+	// Check if the status field is not nil before accessing LastScheduleTime
+	if cronJobStatus.Status.LastScheduleTime != nil {
+		httpCheck.Status.LastExecutionTime = metav1.Time{Time: cronJobStatus.Status.LastScheduleTime.Time}
+	} else {
+		log.Info("CronJob status is nil")
+		// Handle the case where the status is nil, log an error, or take appropriate action
+	}
+
+	if err := r.Status().Update(ctx, httpCheck); err != nil {
+		log.Error(err, "unable to update HttpCheck status")
+		return err
 	}
 
 	return nil

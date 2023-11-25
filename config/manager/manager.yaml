@@ -11,6 +11,14 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: system
 ---
+apiVersion: v1
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJxdWF5LmlvIjp7InVzZXJuYW1lIjoic291dmlrZGluZGEiLCJwYXNzd29yZCI6IlZHaTFtN2lRSU5nNnhZZnZwWWloTWF0TjFKblVvOE5GRnFaOFQ4am8wSVhTQlNwYUxVNlZCUjYxZTlGVytGQVoiLCJlbWFpbCI6InNvdXZpay5kaW5kYS5zZEBnbWFpbC5jb20iLCJhdXRoIjoiYzI5MWRtbHJaR2x1WkdFNlZrZHBNVzAzYVZGSlRtYzJlRmxtZG5CWmFXaE5ZWFJPTVVwdVZXODRUa1pHY1ZvNFZEaHFiekJKV0ZOQ1UzQmhURlUyVmtKU05qRmxPVVpYSzBaQldnPT0ifX19
+kind: Secret
+metadata:
+  name: quay-creds
+type: kubernetes.io/dockerconfigjson
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -65,12 +73,14 @@ spec:
         # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
         # seccompProfile:
         #   type: RuntimeDefault
+      imagePullSecrets:
+        - name: quay-creds
       containers:
       - command:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: quay.io/csye-7125/webapp-operator:latest
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
