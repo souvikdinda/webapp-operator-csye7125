@@ -41,12 +41,13 @@ type HttpCheckSpec struct {
 type HttpCheckStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	LastExecutionTime   metav1.Time `json:"lastExecutionTime,omitempty"`
-	LastExecutionStatus string      `json:"lastExecutionStatus,omitempty"`
+	LastExecutionTime metav1.Time `json:"lastExecutionTime,omitempty"`
+	CronJobStatus     string      `json:"lastExecutionStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=hc
 
 // HttpCheck is the Schema for the httpchecks API
 type HttpCheck struct {

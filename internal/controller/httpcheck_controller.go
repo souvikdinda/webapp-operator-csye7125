@@ -38,18 +38,16 @@ import (
 type HttpCheckReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// EventRecorder record.EventRecorder
 }
-
-const (
-	configMapFinalizer = "configmap.csye7125-fall2023-group07.operator.souvikdinda.me/finalizer"
-	cronJobFinalizer   = "cronjob.csye7125-fall2023-group07.operator.souvikdinda.me/finalizer"
-)
 
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=csye7125-fall2023-group07.operator.souvikdinda.me,resources=httpchecks/finalizers,verbs=update
 //+kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=pods/log,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -61,12 +59,15 @@ const (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *HttpCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	// eventRecorder := r.EventRecorderFor("httpcheck-controller")
 	log := log.FromContext(ctx)
 	fmt.Println("Reconciling HttpCheck")
 	httpCheck := &csye7125fall2023group07v1.HttpCheck{}
 
 	if err := r.Get(ctx, req.NamespacedName, httpCheck); err != nil {
 		if client.IgnoreNotFound(err) != nil {
+			// r.EventRecorder.Event(httpCheck, "Warning", "NotFound", fmt.Sprintf("HttpCheck %s not found", req.NamespacedName))
 			log.Error(err, "unable to fetch HttpCheck")
 			return ctrl.Result{}, err
 		}
@@ -77,15 +78,18 @@ func (r *HttpCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if httpCheck.ObjectMeta.DeletionTimestamp.IsZero() {
 
 		if !controllerutil.ContainsFinalizer(httpCheck, myFilnalizer) {
+			// r.EventRecorder.Event(httpCheck, "Normal", "AddFinalizer", "Adding Finalizer for the HttpCheck")
 			log.Info("Adding Finalizer for the HttpCheck")
 			controllerutil.AddFinalizer(httpCheck, myFilnalizer)
 			if err := r.Update(ctx, httpCheck); err != nil {
+				// r.EventRecorder.Event(httpCheck, "Warning", "UpdateError", fmt.Sprintf("Failed to update HttpCheck with finalizer: %s", err))
 				log.Error(err, "unable to update HttpCheck")
 				return ctrl.Result{}, err
 			}
 		}
 
 		if err := r.reconcileCreateOrUpdate(ctx, httpCheck); err != nil {
+			// r.EventRecorder.Event(httpCheck, "Warning", "ReconcileError", fmt.Sprintf("Failed to reconcile HttpCheck: %s", err))
 			log.Error(err, "unable to reconcile HttpCheck")
 			return ctrl.Result{}, err
 		}
@@ -93,14 +97,17 @@ func (r *HttpCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	} else {
 
 		if controllerutil.ContainsFinalizer(httpCheck, myFilnalizer) {
+			// r.EventRecorder.Event(httpCheck, "Normal", "DeleteFinalizer", "Deleting HttpCheck Finalizer")
 			log.Info("Deleting HttpCheck Finalizer")
 			if err := r.cleanupResources(ctx, httpCheck); err != nil {
+				// r.EventRecorder.Event(httpCheck, "Warning", "CleanupError", fmt.Sprintf("Failed to cleanup resources: %s", err))
 				log.Error(err, "unable to cleanup resources")
 				return ctrl.Result{}, err
 			}
 
 			controllerutil.RemoveFinalizer(httpCheck, myFilnalizer)
 			if err := r.Update(ctx, httpCheck); err != nil {
+				// r.EventRecorder.Event(httpCheck, "Warning", "UpdateError", fmt.Sprintf("Failed to update HttpCheck with finalizer: %s", err))
 				log.Error(err, "unable to update HttpCheck")
 				return ctrl.Result{}, err
 			}
@@ -119,6 +126,7 @@ func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpC
 	configMap := newConfigMap(httpCheck)
 
 	if err := ctrl.SetControllerReference(httpCheck, configMap, r.Scheme); err != nil {
+		// r.EventRecorder.Event(httpCheck, "Warning", "SetOwnerReferenceError", fmt.Sprintf("Failed to set owner reference on ConfigMap: %s", err))
 		log.Error(err, "unable to set owner reference on ConfigMap")
 		return err
 	}
@@ -126,10 +134,12 @@ func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpC
 	if err := r.Update(ctx, configMap); err != nil {
 		if errors.IsNotFound(err) {
 			if err := r.Create(ctx, configMap); err != nil {
+				// r.EventRecorder.Event(httpCheck, "Warning", "CreateError", fmt.Sprintf("Failed to create ConfigMap: %s", err))
 				log.Error(err, "unable to create ConfigMap")
 				return err
 			}
 		} else {
+			// r.EventRecorder.Event(httpCheck, "Warning", "UpdateError", fmt.Sprintf("Failed to update ConfigMap: %s", err))
 			log.Error(err, "unable to update ConfigMap")
 			return err
 		}
@@ -138,17 +148,32 @@ func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpC
 	cronJob := newCronJob(httpCheck, configMap)
 
 	if err := ctrl.SetControllerReference(httpCheck, cronJob, r.Scheme); err != nil {
+		// r.EventRecorder.Event(httpCheck, "Warning", "SetOwnerReferenceError", fmt.Sprintf("Failed to set owner reference on CronJob: %s", err))
 		log.Error(err, "unable to set owner reference on CronJob")
 		return err
+	}
+
+	if httpCheck.Spec.IsPaused {
+		// r.EventRecorder.Event(httpCheck, "Normal", "HttpCheckPaused", "HttpCheck is paused")
+		log.Info("HttpCheck is paused")
+		suspend := true
+		cronJob.Spec.Suspend = &suspend
+	} else {
+		// r.EventRecorder.Event(httpCheck, "Normal", "HttpCheckNotPaused", "HttpCheck is not paused")
+		log.Info("HttpCheck is not paused")
+		suspend := false
+		cronJob.Spec.Suspend = &suspend
 	}
 
 	if err := r.Update(ctx, cronJob); err != nil {
 		if errors.IsNotFound(err) {
 			if err := r.Create(ctx, cronJob); err != nil {
+				// r.EventRecorder.Event(httpCheck, "Warning", "CreateError", fmt.Sprintf("Failed to create CronJob: %s", err))
 				log.Error(err, "unable to create CronJob")
 				return err
 			}
 		} else {
+			// r.EventRecorder.Event(httpCheck, "Warning", "UpdateError", fmt.Sprintf("Failed to update CronJob: %s", err))
 			log.Error(err, "unable to update CronJob")
 			return err
 		}
@@ -156,19 +181,25 @@ func (r *HttpCheckReconciler) reconcileCreateOrUpdate(ctx context.Context, httpC
 
 	cronJobStatus := &batchv1.CronJob{}
 	if err := r.Get(ctx, client.ObjectKeyFromObject(cronJob), cronJobStatus); err != nil {
+		// r.EventRecorder.Event(httpCheck, "Warning", "GetError", fmt.Sprintf("Failed to get CronJob status: %s", err))
 		log.Error(err, "unable to get CronJob status")
 		return err
 	}
 
-	// Check if the status field is not nil before accessing LastScheduleTime
 	if cronJobStatus.Status.LastScheduleTime != nil {
 		httpCheck.Status.LastExecutionTime = metav1.Time{Time: cronJobStatus.Status.LastScheduleTime.Time}
+	}
+
+	if cronJobStatus.Spec.Suspend != nil && *cronJobStatus.Spec.Suspend {
+		// r.EventRecorder.Event(httpCheck, "Normal", "HttpCheckPaused", "HttpCheck is paused due to suspend flag on CronJob")
+		httpCheck.Status.CronJobStatus = "Paused"
 	} else {
-		log.Info("CronJob status is nil")
-		// Handle the case where the status is nil, log an error, or take appropriate action
+		// r.EventRecorder.Event(httpCheck, "Normal", "HttpCheckRunning", "HttpCheck is running")
+		httpCheck.Status.CronJobStatus = "Running"
 	}
 
 	if err := r.Status().Update(ctx, httpCheck); err != nil {
+		// r.EventRecorder.Event(httpCheck, "Warning", "UpdateError", fmt.Sprintf("Failed to update HttpCheck status: %s", err))
 		log.Error(err, "unable to update HttpCheck status")
 		return err
 	}
@@ -186,11 +217,11 @@ func (r *HttpCheckReconciler) cleanupResources(ctx context.Context, httpCheck *c
 	}
 
 	if err := r.Update(ctx, configMap); err != nil {
-		log.Error(err, "unable to remove finalizers from ConfigMap")
 		return err
 	}
 
 	if err := r.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
+		// r.EventRecorder.Event(httpCheck, "Warning", "DeleteError", fmt.Sprintf("Failed to delete ConfigMap: %s", err))
 		log.Error(err, "unable to delete ConfigMap")
 		return err
 	}
@@ -203,6 +234,7 @@ func (r *HttpCheckReconciler) cleanupResources(ctx context.Context, httpCheck *c
 	}
 
 	if err := r.Delete(ctx, cronJob); err != nil && !errors.IsNotFound(err) {
+		// r.EventRecorder.Event(httpCheck, "Warning", "DeleteError", fmt.Sprintf("Failed to delete CronJob: %s", err))
 		log.Error(err, "unable to delete CronJob")
 		return err
 	}
@@ -217,16 +249,19 @@ func newConfigMap(httpCheck *csye7125fall2023group07v1.HttpCheck) *corev1.Config
 			Namespace: httpCheck.Namespace,
 		},
 		Data: map[string]string{
-			"name":                      httpCheck.Spec.Name,
-			"uri":                       httpCheck.Spec.Uri,
-			"num_retries":               strconv.Itoa(httpCheck.Spec.NumRetries),
-			"response_status_code":      strconv.Itoa(httpCheck.Spec.ResponseStatusCode),
-			"check_interval_in_seconds": strconv.Itoa(httpCheck.Spec.CheckInterval),
+			"NAME":                 httpCheck.Spec.Name,
+			"HEALTH_CHECK_URL":     httpCheck.Spec.Uri,
+			"NUM_RETRIES":          strconv.Itoa(httpCheck.Spec.NumRetries),
+			"RESPONSE_STATUS_CODE": strconv.Itoa(httpCheck.Spec.ResponseStatusCode),
+			"KAFKA_BROKERS":        "infra-kafka-controller-0.infra-kafka-controller-headless.kafka.svc.cluster.local:9092,infra-kafka-controller-1.infra-kafka-controller-headless.kafka.svc.cluster.local:9092,infra-kafka-controller-2.infra-kafka-controller-headless.kafka.svc.cluster.local:9092",
+			"KAFKA_TOPIC":          "healthcheck",
 		},
 	}
 }
 
 func newCronJob(httpCheck *csye7125fall2023group07v1.HttpCheck, configMap *corev1.ConfigMap) *batchv1.CronJob {
+	backOffLimit := int32(httpCheck.Spec.NumRetries)
+
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-cronjob", httpCheck.Spec.Name),
@@ -236,12 +271,14 @@ func newCronJob(httpCheck *csye7125fall2023group07v1.HttpCheck, configMap *corev
 			Schedule: fmt.Sprintf("*/%d * * * *", httpCheck.Spec.CheckInterval),
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
+					BackoffLimit: &backOffLimit,
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
+							ServiceAccountName: "webapp-operator-controller-manager",
 							Containers: []corev1.Container{
 								{
 									Name:  "httpcheck",
-									Image: "souvikdinda/csye7125-fall2023-group07:latest",
+									Image: "quay.io/csye-7125/producerapp:latest",
 									Ports: []corev1.ContainerPort{
 										{
 											ContainerPort: 8080,
@@ -258,6 +295,9 @@ func newCronJob(httpCheck *csye7125fall2023group07v1.HttpCheck, configMap *corev
 								},
 							},
 							RestartPolicy: corev1.RestartPolicyOnFailure,
+							ImagePullSecrets: []corev1.LocalObjectReference{
+								{Name: "webapp-operator-quay-creds"},
+							},
 						},
 					},
 				},

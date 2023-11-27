@@ -11,6 +11,8 @@ spec:
     kind: HttpCheck
     listKind: HttpCheckList
     plural: httpchecks
+    shortNames:
+    - hc
     singular: httpcheck
   scope: Namespaced
   versions:
