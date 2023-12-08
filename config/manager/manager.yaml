@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/created-by: webapp-operator
     app.kubernetes.io/part-of: webapp-operator
     app.kubernetes.io/managed-by: kustomize
+    istio-injection: enabled
   name: system
 ---
 apiVersion: v1
