@@ -293,6 +293,11 @@ func newCronJob(httpCheck *csye7125fall2023group07v1.HttpCheck, configMap *corev
 										},
 									},
 								},
+								{
+									Name:    "curl-container",
+									Image:   "curlimages/curl:latest",
+									Command: []string{"sh", "-c", "sleep 30 && curl -sf -XPOST http://127.0.0.1:15020/quitquitquit"},
+								},
 							},
 							RestartPolicy: corev1.RestartPolicyOnFailure,
 							ImagePullSecrets: []corev1.LocalObjectReference{
